@@ -43,15 +43,15 @@ impl App {
             })?;
 
             // Block until an event occurs
-        if event::poll(Duration::from_millis(0))? {
-            if let Event::Key(key) = event::read()? {
-                match key.code {
-                    KeyCode::Char('q') => break,
-                    _ => println!("Got key {}", key.code)
+            if event::poll(Duration::from_millis(0))? {
+                if let Event::Key(key) = event::read()? {
+                    match key.code {
+                        KeyCode::Char('q') => break,
+                        _ => println!("Got key {}", key.code)
+                    }
                 }
+                // You can also handle other event types here, like Mouse events or Resize events
             }
-            // You can also handle other event types here, like Mouse events or Resize events
-        }
         }
         Ok(())
     }
