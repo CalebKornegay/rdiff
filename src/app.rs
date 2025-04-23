@@ -1,53 +1,75 @@
-use std::{error::Error, thread::sleep, time::Duration};
-
-use ratatui::{prelude::{Constraint, Direction, Layout}, Terminal, style::{Style, Color}, widgets::{Borders, Block}};
+use std::{error::Error, time::Duration};
+use ratatui::{style::{Color, Style}, widgets::{Block, Borders, Paragraph}, Terminal};
 use ratatui::crossterm::event::{self, Event, KeyCode};
+use clap::Parser;
 
 use crate::ui::Ui;
 
+#[derive(Parser, Debug)]
+#[command(
+    name = "rdiff",
+    author = "Caleb Kornegay <caleb.kornegay@gmail.com>",
+    version = "0.0.1",
+    about = "A TUI app to visually diff two text files",
+    long_about = "This tool shows a side-by-side diff of two or three files\nAuthor: Caleb Kornegay <caleb.kornegay@gmail.com>"
+)]
+pub struct Args {
+    #[arg(help = "First file")]
+    pub file_1: String,
+
+    #[arg(help = "Second file")]
+    pub file_2: String,
+
+    #[arg(help = "Optional third file")]
+    pub file_3: Option<String>,
+
+    #[arg(short = 'x', long)]
+    pub hex: bool
+}
+
 pub struct App {
     current_scroll: i32,
-    args: Vec<String>
+    args: Args,
+    num_files: u8
 }
 
 impl App {
-    pub fn new() -> Self {
+    pub fn new(args: Args) -> Self {
+        let mut num_files: u8 = 2;
+        if args.file_3.is_some() {
+            num_files += 1;
+        }
+
         Self {
             current_scroll: 0,
-            args: std::env::args().collect::<Vec<String>>()
+            args: args,
+            num_files: num_files
         }
     }
 
     pub fn run<B: ratatui::backend::Backend>(&mut self, terminal: &mut Terminal<B>) -> Result<(), Box<dyn Error>> {
         loop {
+            println!("hi");
             terminal.draw(|frame| {
-                let boxes = Ui::new(&frame);
-                boxes.iter().for_each(|box| {
+                let layout = Ui::new(&frame, self.num_files);
+                layout.boxes.iter().enumerate().for_each(|(i, &b)| {
+                    let mut box_num = String::from("File ");
+                    box_num.push_str(&(i+1).to_string());
                     let block = Block::default()
-                    .title("Box 1")
+                    .title(box_num)
                     .borders(Borders::ALL)
-                    .style(Style::default().bg(Color::LightCyan));
-                    frame.render_widget(block, box);
+                    .style(Style::default().bg(Color::Rgb(0x12, 0x12, 0x12)));
+                    frame.render_widget(Paragraph::new("Hello world!").block(block), b);
                 });
-            // let block1 = Block::default()
-            //     .title("Box 1")
-            //     .borders(Borders::ALL)
-            //     .style(Style::default().bg(Color::LightCyan));
-            // frame.render_widget(block1, boxes[0]);
-
-            // let block2 = Block::default()
-            //     .title("Box 2")
-            //     .borders(Borders::ALL)
-            //     .style(Style::default().bg(Color::LightGreen));
-            // frame.render_widget(block2, boxes[1]);
             })?;
 
             // Block until an event occurs
-            if event::poll(Duration::from_millis(0))? {
+            if event::poll(Duration::from_secs(u64::MAX))? {
                 if let Event::Key(key) = event::read()? {
                     match key.code {
                         KeyCode::Char('q') => break,
-                        _ => println!("Got key {}", key.code)
+                        _ => continue
+                        // _ => writeln!(stderr(), "Got key {}", key.code)?
                     }
                 }
                 // You can also handle other event types here, like Mouse events or Resize events

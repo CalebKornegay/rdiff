@@ -6,9 +6,13 @@ use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
 use std::io::stdout;
 use std::error::Error;
-use app::*;
+use clap::Parser;
+
+use app::{App, Args};
 
 fn main() -> Result<(), Box<dyn Error>> {
+    let mut app = App::new(Args::parse());
+
     let mut stdout = stdout();
     enable_raw_mode()?;
 
@@ -17,8 +21,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    // create app and run it
-    let mut app = App::new();
     let res = app.run(&mut terminal);
 
     // Restore terminal
@@ -35,4 +37,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     Ok(())
+}
+
+fn usage() {
+    std::process::exit(1);
 }
