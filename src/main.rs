@@ -6,12 +6,11 @@ use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
 use std::io::stdout;
 use std::error::Error;
-use clap::Parser;
 
-use app::{App, Args};
+use app::App;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let mut app = App::new(Args::parse());
+    let mut app = App::new();
 
     let mut stdout = stdout();
     enable_raw_mode()?;

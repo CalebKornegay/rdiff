@@ -1,5 +1,5 @@
 use std::rc::Rc;
-use ratatui::{layout::{Constraint, Direction, Layout, Rect}, Frame};
+use ratatui::{layout::{Constraint, Direction, Flex, Layout, Rect}, Frame};
 
 pub struct Ui {
     pub boxes: Rc<[Rect]>
@@ -11,10 +11,11 @@ impl Ui {
             boxes: Layout::default()
                     .direction(Direction::Horizontal) // Arrange items horizontally
                     .constraints(vec![
-                        // Constraint::Percentage((100u8 / num_boxes) as u16);
-                        Constraint::Ratio(1, num_boxes as u32);
+                        Constraint::Percentage((100u8 / num_boxes) as u16);
+                        // Constraint::Ratio(1, num_boxes as u32);
                         num_boxes as usize
                     ])
+                    .flex(Flex::Start)
                     .split(frame.area())
         }
     }
