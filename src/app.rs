@@ -1,5 +1,5 @@
 use std::{error::Error, fs::File, io::{BufRead, BufReader, Seek}, time::Duration};
-use ratatui::{layout::Margin, style::{Color, Style, Styled}, widgets::{Block, Borders, Paragraph, Wrap}, Terminal, text::Span};
+use ratatui::{layout::Margin, style::{Color, Style, Styled}, text::{Line, Span}, widgets::{Block, Borders, Paragraph, Wrap}, Terminal};
 use ratatui::crossterm::event::{self, Event, KeyCode};
 use clap::Parser;
 
@@ -106,7 +106,10 @@ impl App {
                     .style(Style::default().bg(Color::Rgb(0x12, 0x12, 0x12)));
 
 
-                    let text = Span::styled(lines.join("\n"), Style::default().fg(Color::Rgb(0xcb,  0xcb, 0xcb)));
+                    // let text = Span::styled(lines.join("\n"), Style::default().fg(Color::Rgb(0xcb,  0xcb, 0xcb)));
+                    let text = lines.iter().map(|line| {
+                        Line::from(Span::styled(line, Style::default().fg(Color::Rgb(0xcb,  0xcb, 0xcb))))
+                    }).collect::<Vec<Line>>();
 
                     let paragraph = Paragraph::new(text)
                         .block(block).wrap(Wrap {trim: true})
