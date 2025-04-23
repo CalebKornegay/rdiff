@@ -49,7 +49,7 @@ impl App {
 
     pub fn run<B: ratatui::backend::Backend>(&mut self, terminal: &mut Terminal<B>) -> Result<(), Box<dyn Error>> {
         loop {
-            println!("hi");
+            // println!("hi");
             terminal.draw(|frame| {
                 let layout = Ui::new(&frame, self.num_files);
                 layout.boxes.iter().enumerate().for_each(|(i, &b)| {
@@ -69,7 +69,6 @@ impl App {
                     match key.code {
                         KeyCode::Char('q') => break,
                         _ => continue
-                        // _ => writeln!(stderr(), "Got key {}", key.code)?
                     }
                 }
                 // You can also handle other event types here, like Mouse events or Resize events

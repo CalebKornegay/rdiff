@@ -11,7 +11,8 @@ impl Ui {
             boxes: Layout::default()
                     .direction(Direction::Horizontal) // Arrange items horizontally
                     .constraints(vec![
-                        Constraint::Percentage((100u8 / num_boxes) as u16);
+                        // Constraint::Percentage((100u8 / num_boxes) as u16);
+                        Constraint::Ratio(1, num_boxes as u32);
                         num_boxes as usize
                     ])
                     .split(frame.area())

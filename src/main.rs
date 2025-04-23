@@ -38,7 +38,3 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     Ok(())
 }
-
-fn usage() {
-    std::process::exit(1);
-}
