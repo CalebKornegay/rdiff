@@ -1,7 +1,7 @@
-use std::{error::Error, fs::File, io::{BufRead, BufReader, Read, Seek, Write}, time::Duration};
-use ratatui::{buffer::Buffer, crossterm::event::KeyEventKind, layout::Margin, style::{Color, Style, Styled}, text::{Line, Span}, widgets::{Block, Borders, Paragraph, Wrap}, Terminal};
+use std::{error::Error, fs::File, io::{BufRead, BufReader, Read, Seek}};
+use ratatui::{crossterm::event::KeyEventKind, style::{Color, Style}, text::{Line, Span}, widgets::Paragraph, Terminal};
 use ratatui::crossterm::event::{self, Event, KeyCode};
-use sha2::{Sha256, Digest};
+use sha2::{Sha256, Digest, digest::Output};
 use clap::Parser;
 
 use crate::ui::{generate_block, Ui};
@@ -63,7 +63,7 @@ impl App {
         }
 
         let mut equal = true;
-        let mut hashes: Vec<sha2::digest::Output<Sha256>> = Vec::new();
+        let mut hashes: Vec<Output<Sha256>> = Vec::new();
         v_fps.iter_mut()
             .for_each(|fp| {
                 let mut hash = Sha256::new();
