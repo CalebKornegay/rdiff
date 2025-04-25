@@ -1,5 +1,5 @@
 use std::rc::Rc;
-use ratatui::{layout::{Constraint, Direction, Flex, Layout, Rect}, Frame};
+use ratatui::{layout::{Constraint, Direction, Flex, Layout, Rect}, style::{Color, Style}, text::Line, widgets::{Block, Borders, Paragraph}, Frame};
 
 pub struct Ui {
     pub boxes: Rc<[Rect]>
@@ -11,7 +11,7 @@ impl Ui {
             boxes: Layout::default()
                     .direction(Direction::Horizontal) // Arrange items horizontally
                     .constraints(vec![
-                        // Constraint::Percentage((100u8 / num_boxes) as u16);
+                        // Constraint::Percentage((100f64 / num_boxes as f64) as u16);
                         Constraint::Ratio(1, num_boxes as u32);
                         num_boxes as usize
                     ])
@@ -19,4 +19,14 @@ impl Ui {
                     .split(frame.area())
         }
     }
+}
+
+pub fn generate_block<'a>(name: String) -> Block<'a> {
+    Block::default()
+        .title(name)
+        .title_alignment(ratatui::layout::Alignment::Center)
+        .title_style(Style::default().fg(Color::Rgb(0xff, 0xff, 0xff)))
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Rgb(0x3a, 0x3a, 0x3a)))
+        .style(Style::default().bg(Color::Rgb(0x12, 0x12, 0x12)))
 }
