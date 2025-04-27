@@ -1,11 +1,11 @@
 use std::{error::Error, fs::{self, File}};
 use clap::Parser;
 use diffy::{self, DiffOptions};
-use ratatui::{crossterm::event::{MouseEventKind, KeyEventKind}, style::{Color, Style}, text::{Line, Span}, widgets::Paragraph, Terminal};
+use ratatui::{crossterm::event::{KeyEventKind, MouseEventKind}, style::{Color, Style}, text::{Line, Span}, widgets::Paragraph, Terminal};
 use ratatui::crossterm::event::{self, Event, KeyCode};
 
-use crate::{helpers::get_max_line_count, ui::{generate_block, generate_line_numbers, Ui}};
-use crate::helpers::compare_hashes;
+use crate::ui::{generate_block, generate_line_numbers, Ui};
+use crate::helpers::{compare_hashes, get_max_line_count};
 use crate::args::Args;
 
 pub struct App {
@@ -47,6 +47,17 @@ impl App {
         let f2 = fs::read_to_string(&self.args.file_2).unwrap();
         let f3 = fs::read_to_string(&self.args.file_3.as_ref().unwrap_or(&String::new())).unwrap_or(String::new());
 
+        terminal.draw(|frame| {
+            let layout = Ui::new(&frame, 1);
+            let b = layout.boxes[0];
+            let l1 = Line::from(format!("Computing the diffs between the {} files...", self.num_files));
+            let l2 = Line::from("This may take a while...");
+            let p = Paragraph::new(vec![l1, l2])
+                .alignment(ratatui::layout::Alignment::Center)
+                .style(Style::default().fg(Color::Yellow));
+            frame.render_widget(p, b);
+        })?;
+
         let mut ops = DiffOptions::new();
         ops.set_context_len(if self.args.suppress_common_lines {10} else {usize::MAX});
         let diff1 = ops.create_patch(&f1, &f2);
@@ -54,7 +65,6 @@ impl App {
 
         let (left_lines, middle_lines) = App::prepare_diff_lines(&diff1);
         let (_, right_lines) = App::prepare_diff_lines(&diff2);
-
 
         // Put a limit on the self.current_line so it won't go off the page. Harder for horizontal scroll :(
         // let max_file_len: usize = get_max_line_count(&v_fps);
@@ -74,8 +84,8 @@ impl App {
                     // let br = BufReader::new(fp);
                     // let lines = br.lines()
                     //     .skip(self.current_line)
-                    //     .take(b.height as usize - 2)
                     //     .filter_map(Result::ok)
+                    //     .take(b.height as usize - 2)
                     //     .collect::<Vec<String>>();
 
                     let box_name = match i {
