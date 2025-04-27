@@ -1,10 +1,10 @@
-use std::{error::Error, fs::File, io::{BufRead, BufReader, Read, Seek}};
+use std::{error::Error, fs::File, io::{BufRead, BufReader, Seek}};
 use ratatui::{crossterm::event::KeyEventKind, style::{Color, Style}, text::{Line, Span}, widgets::Paragraph, Terminal};
 use ratatui::crossterm::event::{self, Event, KeyCode};
-use sha2::{Sha256, Digest, digest::Output};
 use clap::Parser;
 
-use crate::ui::{generate_block, Ui};
+use crate::ui::{generate_block, generate_line_numbers, Ui};
+use crate::helpers::{compare_hashes};
 
 #[derive(Parser, Debug)]
 #[command(
@@ -62,35 +62,7 @@ impl App {
             v_fps.push(File::open(self.args.file_3.as_ref().unwrap())?);
         }
 
-        let mut equal = true;
-        let mut hashes: Vec<Output<Sha256>> = Vec::new();
-        v_fps.iter_mut()
-            .for_each(|fp| {
-                let mut hash = Sha256::new();
-                let mut buffer = [0; 1024];
-                
-                loop {
-                    let bytes_read = fp.read(&mut buffer).unwrap();
-                    if bytes_read == 0 {
-                        break;
-                    }
-                    hash.update(&buffer[..bytes_read]);
-                }
-
-                hashes.push(hash.finalize());
-                fp.rewind().unwrap();
-            });
-
-        for i in 1..hashes.len() {
-            if hashes[i] != hashes[i - 1] {
-                equal = false;
-            }
-        }
-        drop(hashes);
-
-        if equal {
-            return Err(Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, "There is no diff between the files")));
-        }
+        compare_hashes(&mut v_fps)?;
 
         // Get the file size of each so we can see the max
         let lc_1: usize = BufReader::new(&v_fps[0])
@@ -123,7 +95,7 @@ impl App {
                     let br = BufReader::new(fp);
                     let lines = br.lines()
                         .skip(self.current_line)
-                        .take(b.height as usize)
+                        .take(b.height as usize - 2)
                         .filter_map(Result::ok)
                         .collect::<Vec<String>>();
 
@@ -140,17 +112,28 @@ impl App {
                             return Line::from("");
                         }
 
-                        Line::from(Span::styled(&line[self.current_col..std::cmp::min(line.len(), self.current_col + b.width as usize)], Style::default().fg(Color::Rgb(0x9b,  0x9b, 0x9b))))
+                        Line::from(Span::styled(&line[self.current_col..std::cmp::min(line.len(), self.current_col + b.width as usize)], Style::default().fg(Color::Rgb(0xb0,  0xb0, 0xb0))))
                     }).collect::<Vec<Line>>();
 
                     let paragraph = Paragraph::new(text)
                         .block(block)
                         .left_aligned();
                     
-                    let mut rect = b.clone();
-                    rect.width = min_width;
+                    let shift = ((self.current_line + b.height as usize - 3) as f64).log10() as u16 + 3;
+
+                    // Reduce width a little and shift over so we can render line numbers
+                    let mut text_rect = b.clone();
+                    text_rect.width = min_width - shift;
+                    text_rect.x += shift;
+
+                    // Generate the box that the line numbers go into
+                    let mut line_numbers_rect = b.clone();
+                    line_numbers_rect.width = shift;
+
+                    let line_numbers = generate_line_numbers(self.current_line, b.height as usize);
                     
-                    frame.render_widget(paragraph, rect);
+                    frame.render_widget(line_numbers, line_numbers_rect);
+                    frame.render_widget(paragraph, text_rect);
                 });
             })?;
 

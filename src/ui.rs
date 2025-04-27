@@ -1,5 +1,5 @@
 use std::rc::Rc;
-use ratatui::{layout::{Constraint, Direction, Flex, Layout, Rect}, style::{Color, Style}, widgets::{Block, Borders}, Frame};
+use ratatui::{layout::{Constraint, Direction, Flex, Layout, Rect}, style::{Color, Style}, text::{Line, Span}, widgets::{Block, Borders, Paragraph}, Frame};
 
 pub struct Ui {
     pub boxes: Rc<[Rect]>
@@ -29,4 +29,10 @@ pub fn generate_block<'a>(name: String) -> Block<'a> {
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::Rgb(0x3a, 0x3a, 0x3a)))
         .style(Style::default().bg(Color::Rgb(0x12, 0x12, 0x12)))
+}
+
+pub fn generate_line_numbers<'a>(current_line: usize, height: usize) -> Paragraph<'a> {
+    Paragraph::new((current_line..current_line + height).map(|i| {
+        Line::styled(i.to_string(), Style::default().fg(Color::Rgb(0x12, 0x12, 0x12)))
+    }).collect::<Vec<Line>>()).block(generate_block(String::new())).left_aligned()
 }

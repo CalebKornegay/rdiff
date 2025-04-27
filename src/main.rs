@@ -1,4 +1,5 @@
 mod app;
+mod helpers;
 mod ui;
 
 use ratatui::crossterm::{event::{DisableMouseCapture, EnableMouseCapture}, execute, terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen}};
