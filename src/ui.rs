@@ -1,5 +1,5 @@
 use std::rc::Rc;
-use ratatui::{layout::{Constraint, Direction, Flex, Layout, Rect}, style::{Color, Style}, text::{Line, Span}, widgets::{Block, Borders, Paragraph}, Frame};
+use ratatui::{layout::{Constraint, Direction, Flex, Layout, Rect}, style::{Color, Style}, text::Line, widgets::{Block, Borders, Paragraph}, Frame};
 
 pub struct Ui {
     pub boxes: Rc<[Rect]>
