@@ -1,8 +1,7 @@
 use sha2::{Sha256, Digest, digest::Output};
 use std::error::Error;
 use std::fs::File;
-use std::io::{Read, Seek};
-use diffy;
+use std::io::{BufReader, BufRead, Read, Seek};
 
 pub fn compare_hashes(v_fps: &mut Vec<File>) -> Result<(), Box<dyn Error>> {
     let mut equal = true;
@@ -36,4 +35,22 @@ pub fn compare_hashes(v_fps: &mut Vec<File>) -> Result<(), Box<dyn Error>> {
     }
     
     Ok(())
+}
+
+pub fn get_max_line_count(v_fps: &Vec<File>) -> usize  {
+    // Get the file size of each so we can see the max
+    let lc_1: usize = BufReader::new(&v_fps[0])
+    .lines().filter_map(Result::ok).count();
+    let lc_2: usize = BufReader::new(&v_fps[1])
+        .lines().filter_map(Result::ok).count();
+    let lc_3: usize = {
+        if v_fps.len() == 3 {
+            BufReader::new(&v_fps[2])
+            .lines().filter_map(Result::ok).count()
+        } else {
+            0
+        }
+    };
+
+    std::cmp::max(std::cmp::max(lc_1, lc_2), lc_3)
 }
