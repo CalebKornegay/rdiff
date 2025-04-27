@@ -26,5 +26,8 @@ pub struct Args {
     pub suppress_common_lines: bool,
 
     #[arg(short = 'w', long)]
-    pub width: Option<usize>
+    pub width: Option<usize>,
+
+    #[arg(short = 'c', long)]
+    pub context_lines: Option<usize>,
 }
