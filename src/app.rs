@@ -1,33 +1,12 @@
-use std::{error::Error, fs::File, io::{BufRead, BufReader, Seek}};
+use std::{error::Error, fs::{self, File}};
+use clap::Parser;
+use diffy::{self, DiffOptions};
 use ratatui::{crossterm::event::{MouseEventKind, KeyEventKind}, style::{Color, Style}, text::{Line, Span}, widgets::Paragraph, Terminal};
 use ratatui::crossterm::event::{self, Event, KeyCode};
-use clap::Parser;
 
-use crate::ui::{generate_block, generate_line_numbers, Ui};
-use crate::helpers::{compare_hashes};
-
-#[derive(Parser, Debug)]
-#[command(
-    name = "rdiff",
-    author = "Caleb Kornegay <caleb.kornegay@gmail.com>",
-    version = "0.0.1",
-    about = "A TUI app to visually diff two text files",
-    long_about = "This tool shows a side-by-side diff of two or three files\nAuthor: Caleb Kornegay <caleb.kornegay@gmail.com>"
-)]
-
-pub struct Args {
-    #[arg(help = "First file")]
-    pub file_1: String,
-
-    #[arg(help = "Second file")]
-    pub file_2: String,
-
-    #[arg(help = "Optional third file")]
-    pub file_3: Option<String>,
-
-    #[arg(short = 'x', long)]
-    pub hex: bool
-}
+use crate::{helpers::get_max_line_count, ui::{generate_block, generate_line_numbers, Ui}};
+use crate::helpers::compare_hashes;
+use crate::args::Args;
 
 pub struct App {
     current_line: usize,
@@ -64,22 +43,22 @@ impl App {
 
         compare_hashes(&mut v_fps)?;
 
-        // Get the file size of each so we can see the max
-        let lc_1: usize = BufReader::new(&v_fps[0])
-            .lines().filter_map(Result::ok).count();
-        let lc_2: usize = BufReader::new(&v_fps[1])
-            .lines().filter_map(Result::ok).count();
-        let lc_3: usize = {
-            if v_fps.len() == 3 {
-                BufReader::new(&v_fps[2])
-                .lines().filter_map(Result::ok).count()
-            } else {
-                0
-            }
-        };
+        let f1 = fs::read_to_string(&self.args.file_1).unwrap();
+        let f2 = fs::read_to_string(&self.args.file_2).unwrap();
+        let f3 = fs::read_to_string(&self.args.file_3.as_ref().unwrap_or(&String::new())).unwrap_or(String::new());
+
+        let mut ops = DiffOptions::new();
+        ops.set_context_len(if self.args.suppress_common_lines {10} else {usize::MAX});
+        let diff1 = ops.create_patch(&f1, &f2);
+        let diff2 = ops.create_patch(&f1, &f3);
+
+        let (left_lines, middle_lines) = App::prepare_diff_lines(&diff1);
+        let (_, right_lines) = App::prepare_diff_lines(&diff2);
+
 
         // Put a limit on the self.current_line so it won't go off the page. Harder for horizontal scroll :(
-        let max_file_len: usize = std::cmp::max(std::cmp::max(lc_1, lc_2), lc_3);
+        // let max_file_len: usize = get_max_line_count(&v_fps);
+        let max_file_len = std::cmp::max(middle_lines.len(), std::cmp::max(left_lines.len(), right_lines.len()));
         let mut max_height: usize = 0;
         
         loop {
@@ -89,15 +68,15 @@ impl App {
                 let min_width = layout.boxes.iter().map(|&b| b.width).min().unwrap();
                 max_height = layout.boxes.iter().map(|&b| b.height).min().unwrap() as usize;
                 layout.boxes.iter().enumerate().for_each(|(i, &b)| {
-                    let mut fp = &v_fps[i as usize];
-                    fp.rewind().unwrap();
+                    // let mut fp = &v_fps[i as usize];
+                    // fp.rewind().unwrap();
 
-                    let br = BufReader::new(fp);
-                    let lines = br.lines()
-                        .skip(self.current_line)
-                        .take(b.height as usize - 2)
-                        .filter_map(Result::ok)
-                        .collect::<Vec<String>>();
+                    // let br = BufReader::new(fp);
+                    // let lines = br.lines()
+                    //     .skip(self.current_line)
+                    //     .take(b.height as usize - 2)
+                    //     .filter_map(Result::ok)
+                    //     .collect::<Vec<String>>();
 
                     let box_name = match i {
                         0 => self.args.file_1.clone(),
@@ -107,13 +86,97 @@ impl App {
                     };
                     let block = generate_block(box_name);
 
-                    let text = lines.iter().map(|line| {
-                        if line.len() <= self.current_col {
-                            return Line::from("");
-                        }
+                    // let text = lines.iter().map(|line| {
+                    //     if line.len() <= self.current_col {
+                    //         return Line::from("");
+                    //     }
 
-                        Line::from(Span::styled(&line[self.current_col..std::cmp::min(line.len(), self.current_col + b.width as usize)], Style::default().fg(Color::Rgb(0xb0,  0xb0, 0xb0))))
-                    }).collect::<Vec<Line>>();
+                    //     Line::from(Span::styled(&line[self.current_col..std::cmp::min(line.len(), self.current_col + b.width as usize)], Style::default().fg(Color::Rgb(0xb0,  0xb0, 0xb0))))
+                    // }).collect::<Vec<Line>>();
+
+                    let mut text: Vec<Line> = Vec::new();
+                    if i == 0 {
+                        text = left_lines.iter().skip(self.current_line).map(|line| {
+                            let span = &line.spans[0];
+                            let style = span.style;
+                            let mut content = span.content.clone().to_string();
+                            let len = content.len();
+
+                            if len <= self.current_col {
+                                return Line::from("");
+                            }
+
+                            if self.args.hex  {
+                                content = content[self.current_col..std::cmp::min(len, self.current_col + b.width as usize)].as_bytes().chunks(self.args.width.unwrap_or(4)).map(|chunk| {
+                                    chunk.iter().map(|x| format!("{:0x}", x)).collect()
+                                }).collect::<Vec<String>>().iter().map(|l| {
+                                    let mut s = String::new();
+                                    for _ in l.len()..self.args.width.unwrap_or(4) *  2 {
+                                        s.push('0');
+                                    }
+                                    format!("{}{}", s,  l)
+                                }).collect::<Vec<String>>().join(" ");
+                            }  else {
+                                content = content[self.current_col..std::cmp::min(len, self.current_col + b.width as usize)].to_string();
+                            }
+
+                            Line::styled(content, style)
+                        }).collect::<Vec<Line>>();
+                    } else if i == 1 {
+                        text = middle_lines.iter().skip(self.current_line).map(|line| {
+                            let span = &line.spans[0];
+                            let style = span.style;
+                            let mut content = span.content.clone().to_string();
+                            let len = content.len();
+
+                            if len <= self.current_col {
+                                return Line::from("");
+                            }
+                            
+                            if self.args.hex  {
+                                content = content[self.current_col..std::cmp::min(len, self.current_col + b.width as usize)].as_bytes().chunks(self.args.width.unwrap_or(4)).map(|chunk| {
+                                    chunk.iter().map(|x| format!("{:0x}", x)).collect()
+                                }).collect::<Vec<String>>().iter().map(|l| {
+                                    let mut s = String::new();
+                                    for _ in l.len()..self.args.width.unwrap_or(4) *  2 {
+                                        s.push('0');
+                                    }
+                                    format!("{}{}", s,  l)
+                                }).collect::<Vec<String>>().join(" ");
+                            }  else {
+                                content = content[self.current_col..std::cmp::min(len, self.current_col + b.width as usize)].to_string();
+                            }
+
+                            Line::styled(content, style)
+                        }).collect::<Vec<Line>>();
+                    } else if i == 2 {
+                        text = right_lines.iter().skip(self.current_line).map(|line| {
+                            let span = &line.spans[0];
+                            let style = span.style;
+                            let mut content = span.content.clone().to_string();
+                            let len = content.len();
+
+                            if len <= self.current_col {
+                                return Line::from("");
+                            }
+                            
+                            if self.args.hex  {
+                                content = content[self.current_col..std::cmp::min(len, self.current_col + b.width as usize)].as_bytes().chunks(self.args.width.unwrap_or(4)).map(|chunk| {
+                                    chunk.iter().map(|x| format!("{:0x}", x)).collect()
+                                }).collect::<Vec<String>>().iter().map(|l| {
+                                    let mut s = String::new();
+                                    for _ in l.len()..self.args.width.unwrap_or(4) *  2 {
+                                        s.push('0');
+                                    }
+                                    format!("{}{}", s,  l)
+                                }).collect::<Vec<String>>().join(" ");
+                            }  else {
+                                content = content[self.current_col..std::cmp::min(len, self.current_col + b.width as usize)].to_string();
+                            }
+
+                            Line::styled(content, style)
+                        }).collect::<Vec<Line>>();
+                    }
 
                     let paragraph = Paragraph::new(text)
                         .block(block)
@@ -154,6 +217,26 @@ impl App {
                                 KeyCode::Char('r') => {
                                     self.current_col = 0;
                                     self.current_line = 0;
+                                    break;
+                                },
+                                KeyCode::Char('e') => {
+                                    self.current_line = max_file_len - max_height +  3;
+                                    break;
+                                },
+                                KeyCode::Char('b') => {
+                                    self.current_line = 0;
+                                    break;
+                                },
+                                KeyCode::PageDown |
+                                KeyCode::Char('n') => {
+                                    if self.current_line + max_height  - 3 < max_file_len {
+                                        self.current_line += max_height - 5
+                                    }
+                                    break;
+                                },
+                                KeyCode::PageUp |
+                                KeyCode::Char('l') => {
+                                    self.current_line = std::cmp::max(self.current_line.saturating_sub(max_height - 5), 0);
                                     break;
                                 },
                                 KeyCode::Right => {
@@ -213,5 +296,38 @@ impl App {
         }
         
         Ok(())
+    }
+
+    fn prepare_diff_lines<'a>(patch: &'a diffy::Patch<'a, str>) -> (Vec<Line<'a>>, Vec<Line<'a>>) {
+        let mut left: Vec<Line> = Vec::new();
+        let mut right: Vec<Line> = Vec::new();
+
+        let context_style = Style::default().fg(Color::DarkGray);
+        let deleted_style = Style::default().fg(Color::Red);
+        let added_style = Style::default().fg(Color::Green);
+        let empty_line = Line::from(vec![Span::from("")]);
+
+        for hunk in patch.hunks() {
+            for line in hunk.lines() {
+                match line.to_owned() {
+                    diffy::Line::Context(l) => {
+                        let styled = Span::styled(l.trim(), context_style);
+                        left.push(Line::from(vec![styled.clone()]));
+                        right.push(Line::from(vec![styled]));
+                    },
+                    diffy::Line::Delete(l) => {
+                        let styled = Span::styled(l.trim(), deleted_style);
+                        left.push(Line::from(vec![styled]));
+                        right.push(empty_line.clone()); // Add placeholder to keep alignment
+                    },
+                    diffy::Line::Insert(l) => {
+                        let styled = Span::styled(l.trim(), added_style);
+                        left.push(empty_line.clone()); // Add placeholder
+                        right.push(Line::from(vec![styled]));
+                    }
+                }
+            }
+        }
+        (left, right)
     }
 }
