@@ -59,7 +59,7 @@ impl App {
         })?;
 
         let mut ops = DiffOptions::new();
-        ops.set_context_len(if self.args.suppress_common_lines {10} else {usize::MAX});
+        ops.set_context_len(if self.args.suppress_common_lines {self.args.context_lines.unwrap_or(10)} else {usize::MAX});
         let diff1 = ops.create_patch(&f1, &f2);
         let diff2 = ops.create_patch(&f1, &f3);
 
@@ -68,7 +68,7 @@ impl App {
 
         // Put a limit on the self.current_line so it won't go off the page. Harder for horizontal scroll :(
         // let max_file_len: usize = get_max_line_count(&v_fps);
-        let max_file_len = std::cmp::max(middle_lines.len(), std::cmp::max(left_lines.len(), right_lines.len()));
+        let max_file_len = std::cmp::max(middle_lines.len(), std::cmp::max(left_lines.len(), if f3.len() > 0 {right_lines.len()} else {0}));
         let mut max_height: usize = 0;
         
         loop {
