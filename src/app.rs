@@ -1,5 +1,5 @@
 use std::{error::Error, fs::File, io::{BufRead, BufReader, Seek}};
-use ratatui::{crossterm::event::KeyEventKind, style::{Color, Style}, text::{Line, Span}, widgets::Paragraph, Terminal};
+use ratatui::{crossterm::event::{MouseEventKind, KeyEventKind}, style::{Color, Style}, text::{Line, Span}, widgets::Paragraph, Terminal};
 use ratatui::crossterm::event::{self, Event, KeyCode};
 use clap::Parser;
 
@@ -184,6 +184,25 @@ impl App {
                                 _ => continue
                             }
                         },
+                        Event::Mouse(e) => {
+                            match e.kind {
+                                MouseEventKind::ScrollDown => {
+                                    // Down allow scroll too far down
+                                    if self.current_line + max_height  - 3 < max_file_len {
+                                        self.current_line += 1;
+                                        break;
+                                    }
+                                },
+                                MouseEventKind::ScrollUp => {
+                                    // Don't scroll past beginning
+                                    if self.current_line > 0 {
+                                        self.current_line -= 1;
+                                        break;
+                                    }
+                                }
+                                _ => continue
+                            }
+                        }
                         _ => continue
                     }
                 }
