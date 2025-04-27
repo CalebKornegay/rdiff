@@ -33,6 +33,6 @@ pub fn generate_block<'a>(name: String) -> Block<'a> {
 
 pub fn generate_line_numbers<'a>(current_line: usize, height: usize) -> Paragraph<'a> {
     Paragraph::new((current_line..current_line + height).map(|i| {
-        Line::styled(i.to_string(), Style::default().fg(Color::Rgb(0x12, 0x12, 0x12)))
+        Line::styled(i.to_string(), Style::default().fg(Color::Rgb(0x34, 0x34, 0x34)))
     }).collect::<Vec<Line>>()).block(generate_block(String::new())).left_aligned()
 }
