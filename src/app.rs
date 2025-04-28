@@ -1,11 +1,11 @@
 use std::{error::Error, fs::{self, File}};
 use clap::Parser;
 use diffy::{self, DiffOptions};
-use ratatui::{crossterm::event::{KeyEventKind, MouseEventKind}, style::{Color, Style}, text::{Line, Span}, widgets::Paragraph, Terminal};
+use ratatui::{crossterm::event::{KeyEventKind, MouseEventKind}, layout::{Constraint, Rect}, style::{Color, Style}, text::{Line, Span}, widgets::{Block, Borders, Paragraph}, Terminal};
 use ratatui::crossterm::event::{self, Event, KeyCode};
 
 use crate::ui::{generate_block, generate_line_numbers, Ui};
-use crate::helpers::{compare_hashes, get_max_line_count};
+use crate::helpers::compare_hashes;
 use crate::args::Args;
 
 pub struct App {
@@ -41,53 +41,88 @@ impl App {
             v_fps.push(File::open(self.args.file_3.as_ref().unwrap())?);
         }
 
+        // Compute the hashes to see if the files are the same
         compare_hashes(&mut v_fps)?;
+        drop(v_fps);
 
+        // Hopefully this doesn't blow up your computer
         let f1 = fs::read_to_string(&self.args.file_1).unwrap();
         let f2 = fs::read_to_string(&self.args.file_2).unwrap();
         let f3 = fs::read_to_string(&self.args.file_3.as_ref().unwrap_or(&String::new())).unwrap_or(String::new());
 
+        // Draw a loading screen in case the files are large so the user doesn't think our program sucks (as much)
         terminal.draw(|frame| {
-            let layout = Ui::new(&frame, 1);
-            let b = layout.boxes[0];
             let l1 = Line::from(format!("Computing the diffs between the {} files...", self.num_files));
             let l2 = Line::from("This may take a while...");
+
+            let block = generate_block(String::new());
+            
+            let b = Ui::center_rect(frame.area(), Constraint::Length(l1.width() as u16), Constraint::Length(2));
+
             let p = Paragraph::new(vec![l1, l2])
                 .alignment(ratatui::layout::Alignment::Center)
                 .style(Style::default().fg(Color::Yellow));
+
+            frame.render_widget(block, frame.area());
             frame.render_widget(p, b);
         })?;
 
+        // Set up the diff options based on cli args
         let mut ops = DiffOptions::new();
         ops.set_context_len(if self.args.suppress_common_lines {self.args.context_lines.unwrap_or(10)} else {usize::MAX});
+
+        let keybinds_text = vec![
+            "[n] next page",
+            "[l] last page",
+            "[h] help",
+            "[r] reset",
+            "[q] quit",
+        ];
+
+        // Compute the diffs
         let diff1 = ops.create_patch(&f1, &f2);
         let diff2 = ops.create_patch(&f1, &f3);
 
+        // Get the formatted Lines for display for each frame, slicing them based 
         let (left_lines, middle_lines) = App::prepare_diff_lines(&diff1);
         let (_, right_lines) = App::prepare_diff_lines(&diff2);
 
         // Put a limit on the self.current_line so it won't go off the page. Harder for horizontal scroll :(
-        // let max_file_len: usize = get_max_line_count(&v_fps);
         let max_file_len = std::cmp::max(middle_lines.len(), std::cmp::max(left_lines.len(), if f3.len() > 0 {right_lines.len()} else {0}));
         let mut max_height: usize = 0;
+        let mut show_help: bool = false;
         
         loop {
             terminal.draw(|frame| {
+                // Show the help screen if 'h' was pressed
+                if show_help {
+                    Ui::show_help(frame, &keybinds_text);
+                    return;
+                }
+                
                 // Get the layout and min_width so that we show the same amount of characters per row
-                let layout = Ui::new(&frame, self.num_files);
-                let min_width = layout.boxes.iter().map(|&b| b.width).min().unwrap();
-                max_height = layout.boxes.iter().map(|&b| b.height).min().unwrap() as usize;
+                let mut layout_rect = frame.area();
+                layout_rect.height -= 1;
+
+                let layout = Ui::new(layout_rect, self.num_files);
+                let min_width = layout.get_min_width();
+                max_height = layout.get_height();
+
+                let keybinds_rect = Rect::new(
+                    0, layout_rect.height, layout_rect.width, 1
+                );
+
+                frame.render_widget( 
+                    Block::default()
+                    .title(keybinds_text.join(" "))
+                    .title_alignment(ratatui::layout::Alignment::Center)
+                    .title_style(Style::default().fg(Color::Rgb(0xff, 0xff, 0xff)))
+                    .borders(Borders::TOP)
+                    .border_style(Style::default().fg(Color::Rgb(0x3a, 0x3a, 0x3a)))
+                    .style(Style::default().bg(Color::Rgb(0x12, 0x12, 0x12))), keybinds_rect
+                );
+
                 layout.boxes.iter().enumerate().for_each(|(i, &b)| {
-                    // let mut fp = &v_fps[i as usize];
-                    // fp.rewind().unwrap();
-
-                    // let br = BufReader::new(fp);
-                    // let lines = br.lines()
-                    //     .skip(self.current_line)
-                    //     .filter_map(Result::ok)
-                    //     .take(b.height as usize - 2)
-                    //     .collect::<Vec<String>>();
-
                     let box_name = match i {
                         0 => self.args.file_1.clone(),
                         1 => self.args.file_2.clone(),
@@ -96,97 +131,12 @@ impl App {
                     };
                     let block = generate_block(box_name);
 
-                    // let text = lines.iter().map(|line| {
-                    //     if line.len() <= self.current_col {
-                    //         return Line::from("");
-                    //     }
-
-                    //     Line::from(Span::styled(&line[self.current_col..std::cmp::min(line.len(), self.current_col + b.width as usize)], Style::default().fg(Color::Rgb(0xb0,  0xb0, 0xb0))))
-                    // }).collect::<Vec<Line>>();
-
-                    let mut text: Vec<Line> = Vec::new();
-                    if i == 0 {
-                        text = left_lines.iter().skip(self.current_line).map(|line| {
-                            let span = &line.spans[0];
-                            let style = span.style;
-                            let mut content = span.content.clone().to_string();
-                            let len = content.len();
-
-                            if len <= self.current_col {
-                                return Line::from("");
-                            }
-
-                            if self.args.hex  {
-                                content = content[self.current_col..std::cmp::min(len, self.current_col + b.width as usize)].as_bytes().chunks(self.args.width.unwrap_or(4)).map(|chunk| {
-                                    chunk.iter().map(|x| format!("{:0x}", x)).collect()
-                                }).collect::<Vec<String>>().iter().map(|l| {
-                                    let mut s = String::new();
-                                    for _ in l.len()..self.args.width.unwrap_or(4) *  2 {
-                                        s.push('0');
-                                    }
-                                    format!("{}{}", s,  l)
-                                }).collect::<Vec<String>>().join(" ");
-                            }  else {
-                                content = content[self.current_col..std::cmp::min(len, self.current_col + b.width as usize)].to_string();
-                            }
-
-                            Line::styled(content, style)
-                        }).collect::<Vec<Line>>();
-                    } else if i == 1 {
-                        text = middle_lines.iter().skip(self.current_line).map(|line| {
-                            let span = &line.spans[0];
-                            let style = span.style;
-                            let mut content = span.content.clone().to_string();
-                            let len = content.len();
-
-                            if len <= self.current_col {
-                                return Line::from("");
-                            }
-                            
-                            if self.args.hex  {
-                                content = content[self.current_col..std::cmp::min(len, self.current_col + b.width as usize)].as_bytes().chunks(self.args.width.unwrap_or(4)).map(|chunk| {
-                                    chunk.iter().map(|x| format!("{:0x}", x)).collect()
-                                }).collect::<Vec<String>>().iter().map(|l| {
-                                    let mut s = String::new();
-                                    for _ in l.len()..self.args.width.unwrap_or(4) *  2 {
-                                        s.push('0');
-                                    }
-                                    format!("{}{}", s,  l)
-                                }).collect::<Vec<String>>().join(" ");
-                            }  else {
-                                content = content[self.current_col..std::cmp::min(len, self.current_col + b.width as usize)].to_string();
-                            }
-
-                            Line::styled(content, style)
-                        }).collect::<Vec<Line>>();
-                    } else if i == 2 {
-                        text = right_lines.iter().skip(self.current_line).map(|line| {
-                            let span = &line.spans[0];
-                            let style = span.style;
-                            let mut content = span.content.clone().to_string();
-                            let len = content.len();
-
-                            if len <= self.current_col {
-                                return Line::from("");
-                            }
-                            
-                            if self.args.hex  {
-                                content = content[self.current_col..std::cmp::min(len, self.current_col + b.width as usize)].as_bytes().chunks(self.args.width.unwrap_or(4)).map(|chunk| {
-                                    chunk.iter().map(|x| format!("{:0x}", x)).collect()
-                                }).collect::<Vec<String>>().iter().map(|l| {
-                                    let mut s = String::new();
-                                    for _ in l.len()..self.args.width.unwrap_or(4) *  2 {
-                                        s.push('0');
-                                    }
-                                    format!("{}{}", s,  l)
-                                }).collect::<Vec<String>>().join(" ");
-                            }  else {
-                                content = content[self.current_col..std::cmp::min(len, self.current_col + b.width as usize)].to_string();
-                            }
-
-                            Line::styled(content, style)
-                        }).collect::<Vec<Line>>();
-                    }
+                    let text = match i {
+                        0 => self.generate_block_lines(&left_lines, &b),
+                        1 => self.generate_block_lines(&middle_lines, &b),
+                        2 => self.generate_block_lines(&right_lines, &b),
+                        _ => Vec::new(),
+                    };
 
                     let paragraph = Paragraph::new(text)
                         .block(block)
@@ -223,6 +173,10 @@ impl App {
 
                             // Enable quit, refresh, and vertical and horizontal scroll
                             match key.code {
+                                KeyCode::Char('h') => {
+                                    show_help = !show_help;
+                                    break;
+                                },
                                 KeyCode::Char('q') => should_break = true,
                                 KeyCode::Char('r') => {
                                     self.current_col = 0;
@@ -306,6 +260,41 @@ impl App {
         }
         
         Ok(())
+    }
+
+    fn generate_block_lines<'a>(&self, input_lines: &Vec<Line<'a>>, b: &Rect) -> Vec<Line<'a>> {
+        input_lines.iter().skip(self.current_line).map(|line| {
+            let span = &line.spans[0];
+            let style = span.style;
+            let mut content = span.content.clone().to_string();
+            let len = content.len();
+
+            if len <= self.current_col {
+                return Line::from("");
+            }
+            
+            if self.args.hex  {
+                content = content[self.current_col..std::cmp::min(len, self.current_col + b.width as usize)]
+                .as_bytes()
+                .chunks(self.args.width.unwrap_or(4))
+                .map(|chunk| {
+                    chunk.iter().map(|x| format!("{:0x}", x)).collect()
+                })
+                .collect::<Vec<String>>()
+                .iter().map(|l| {
+                    let mut s = String::new();
+                    for _ in l.len()..self.args.width.unwrap_or(4) *  2 {
+                        s.push('0');
+                    }
+                    format!("{}{}", s,  l)
+                })
+                .collect::<Vec<String>>().join(" ");
+            }  else {
+                content = content[self.current_col..std::cmp::min(len, self.current_col + b.width as usize)].to_string();
+            }
+
+            Line::styled(content, style)
+        }).collect::<Vec<Line>>()
     }
 
     fn prepare_diff_lines<'a>(patch: &'a diffy::Patch<'a, str>) -> (Vec<Line<'a>>, Vec<Line<'a>>) {
