@@ -1,5 +1,5 @@
 [package]
-name = "rdiff"
+name = "rdiff3"
 version = "0.0.1"
 authors = ["Caleb Kornegay <caleb.kornegay@gmail.com>"]
 edition = "2021"

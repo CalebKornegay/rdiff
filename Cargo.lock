@@ -567,7 +567,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "rdiff"
+name = "rdiff3"
 version = "0.0.1"
 dependencies = [
  "clap",
