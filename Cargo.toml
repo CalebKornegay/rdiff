@@ -1,6 +1,6 @@
 [package]
 name = "rdiff3"
-version = "0.0.1"
+version = "0.0.2"
 authors = ["Caleb Kornegay <caleb.kornegay@gmail.com>"]
 edition = "2021"
 description = "Terminal interface to diff 2 or 3 files with a few command line options like hex with variable widths"
