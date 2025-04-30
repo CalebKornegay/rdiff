@@ -6,13 +6,13 @@ pub struct Ui {
 }
 
 impl Ui {
-    pub fn new(rect: Rect, num_boxes: u8) -> Self {
+    pub fn new(rect: Rect) -> Self {
         Self {
             boxes: Layout::default()
                     .direction(Direction::Horizontal) // Arrange items horizontally
                     .constraints(vec![
-                        Constraint::Ratio(1, num_boxes as u32);
-                        num_boxes as usize
+                        Constraint::Ratio(1, 2),
+                        Constraint::Ratio(1, 2)
                     ])
                     .flex(Flex::Start)
                     .split(rect)
