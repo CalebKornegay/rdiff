@@ -11,24 +11,17 @@ use crate::args::Args;
 pub struct App {
     current_line: usize,
     current_col: usize,
-    args: Args,
-    num_files: u8
+    args: Args
 }
 
 impl App {
     pub fn new() -> Self {
         let args = Args::parse();
-        let mut num_files: u8 = 2;
-
-        if args.file_3.is_some() {
-            num_files += 1;
-        }
 
         Self {
             current_line: 0,
             current_col: 0,
-            args: args,
-            num_files: num_files
+            args: args
         }
     }
 
@@ -37,9 +30,6 @@ impl App {
         let mut v_fps: Vec<File> = Vec::new();
         v_fps.push(File::open(&self.args.file_1)?);
         v_fps.push(File::open(&self.args.file_2)?);
-        if self.args.file_3.is_some() {
-            v_fps.push(File::open(self.args.file_3.as_ref().unwrap())?);
-        }
 
         // Compute the hashes to see if the files are the same
         compare_hashes(&mut v_fps)?;
@@ -48,11 +38,10 @@ impl App {
         // Hopefully this doesn't blow up your computer
         let f1 = fs::read_to_string(&self.args.file_1).unwrap();
         let f2 = fs::read_to_string(&self.args.file_2).unwrap();
-        let f3 = fs::read_to_string(&self.args.file_3.as_ref().unwrap_or(&String::new())).unwrap_or(String::new());
 
         // Draw a loading screen in case the files are large so the user doesn't think our program sucks (as much)
         terminal.draw(|frame| {
-            let l1 = Line::from(format!("Computing the diffs between the {} files...", self.num_files));
+            let l1 = Line::from("Computing the diffs between the files...");
             let l2 = Line::from("This may take a while...");
 
             let block = generate_block(String::new());
@@ -81,14 +70,12 @@ impl App {
 
         // Compute the diffs
         let diff1 = ops.create_patch(&f1, &f2);
-        let diff2 = ops.create_patch(&f1, &f3);
 
         // Get the formatted Lines for display for each frame, slicing them based 
-        let (left_lines, middle_lines) = App::prepare_diff_lines(&diff1);
-        let (_, right_lines) = App::prepare_diff_lines(&diff2);
+        let (left_lines, right_lines) = App::prepare_diff_lines(&diff1);
 
         // Put a limit on the self.current_line so it won't go off the page. Harder for horizontal scroll :(
-        let max_file_len = std::cmp::max(middle_lines.len(), std::cmp::max(left_lines.len(), if f3.len() > 0 {right_lines.len()} else {0}));
+        let max_file_len = std::cmp::max(left_lines.len(), right_lines.len());
         let mut max_height: usize = 0;
         let mut show_help: bool = false;
         
@@ -104,7 +91,7 @@ impl App {
                 let mut layout_rect = frame.area();
                 layout_rect.height -= 1;
 
-                let layout = Ui::new(layout_rect, self.num_files);
+                let layout = Ui::new(layout_rect);
                 let min_width = layout.get_min_width();
                 max_height = layout.get_height();
 
@@ -126,15 +113,13 @@ impl App {
                     let box_name = match i {
                         0 => self.args.file_1.clone(),
                         1 => self.args.file_2.clone(),
-                        2 => self.args.file_3.as_ref().unwrap().clone(),
                         _ => String::new()
                     };
                     let block = generate_block(box_name);
 
                     let text = match i {
                         0 => self.generate_block_lines(&left_lines, &b),
-                        1 => self.generate_block_lines(&middle_lines, &b),
-                        2 => self.generate_block_lines(&right_lines, &b),
+                        1 => self.generate_block_lines(&right_lines, &b),
                         _ => Vec::new(),
                     };
 

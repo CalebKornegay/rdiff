@@ -1,16 +1,16 @@
 [package]
 name = "rdiff3"
-version = "0.0.2"
+version = "0.0.3"
 authors = ["Caleb Kornegay <caleb.kornegay@gmail.com>"]
 edition = "2021"
-description = "Terminal interface to diff 2 or 3 files with a few command line options like hex with variable widths"
+description = "Terminal user interface to diff 2 files with a few command line options like hex with variable widths"
 license-file = "LICENSE"
 
 [dependencies]
 ratatui = "0.29.0"
 crossterm = "0.29.0"
 similar = "2.2"
-tui-input = "0.11.1"
+tui-input = "0.12.0"
 clap = { version = "4.5.37", features = ["derive"] }
 sha2 = "0.10.8"
 diffy = "0.4.2"
