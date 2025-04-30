@@ -58,7 +58,7 @@ impl App {
 
         // Set up the diff options based on cli args
         let mut ops = DiffOptions::new();
-        ops.set_context_len(if self.args.suppress_common_lines {self.args.context_lines.unwrap_or(10)} else {usize::MAX});
+        ops.set_context_len(if self.args.suppress_common_lines {0} else {self.args.context_lines.unwrap_or(usize::MAX)});
 
         let keybinds_text = vec![
             "[n] next page",
@@ -283,8 +283,9 @@ impl App {
     }
 
     fn prepare_diff_lines<'a>(patch: &'a diffy::Patch<'a, str>) -> (Vec<Line<'a>>, Vec<Line<'a>>) {
-        let mut left: Vec<Line> = Vec::new();
-        let mut right: Vec<Line> = Vec::new();
+        let len = patch.hunks().iter().map(|x| x.lines().len()).sum();
+        let mut left: Vec<Line> = Vec::with_capacity(len);
+        let mut right: Vec<Line> = Vec::with_capacity(len);
 
         let context_style = Style::default().fg(Color::DarkGray);
         let deleted_style = Style::default().fg(Color::Red);
