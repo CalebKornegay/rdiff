@@ -36,7 +36,7 @@ impl Ui {
                 Line::from("[e] end of file"),
                 Line::from("[b] begining of file"),
                 Line::from("[\u{2195}] move up and down using arrow keys or mouse"),
-                Line::from("[\u{2194}] move left and right using arrow keys")
+                // Line::from("[\u{2194}] move left and right using arrow keys")
             ]
         );
 
@@ -73,10 +73,4 @@ pub fn generate_block<'a>(name: String) -> Block<'a> {
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::Rgb(0x3a, 0x3a, 0x3a)))
         .style(Style::default().bg(Color::Rgb(0x12, 0x12, 0x12)))
-}
-
-pub fn generate_line_numbers<'a>(current_line: usize, height: usize) -> Paragraph<'a> {
-    Paragraph::new((current_line..current_line + height).map(|i| {
-        Line::styled((i+1).to_string(), Style::default().fg(Color::Rgb(0x34, 0x34, 0x34)))
-    }).collect::<Vec<Line>>()).block(generate_block(String::new())).left_aligned()
 }
