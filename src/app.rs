@@ -1,4 +1,4 @@
-use std::{error::Error, fs::{self, File}};
+use std::{error::Error, ffi::{OsStr, OsString}, fs::{self, File}, path::Path};
 use clap::Parser;
 use diffy::{self, DiffOptions};
 use ratatui::{crossterm::event::{KeyEventKind, MouseEventKind}, layout::{Constraint, Rect}, style::{Color, Style, Stylize}, text::{Line, Span}, widgets::{Block, Borders, Clear, Paragraph}, Terminal};
@@ -151,11 +151,11 @@ impl App {
 
                 layout.boxes.iter().enumerate().for_each(|(i, &b)| {
                     let box_name = match i {
-                        0 => self.args.file_1.clone().split('/').last().unwrap().to_string(),
-                        1 => self.args.file_2.clone().split('/').last().unwrap().to_string(),
-                        _ => String::new()
+                        0 => Path::new(&self.args.file_1.clone()).file_name().unwrap().to_os_string(),
+                        1 => Path::new(&self.args.file_2.clone()).file_name().unwrap().to_os_string(),
+                        _ => OsString::new()
                     };
-                    let block = generate_block(box_name);
+                    let block = generate_block(box_name.into_string().unwrap());
 
                     // let text = match i {
                     //     0 => self.generate_block_lines(&left_lines, &b),
@@ -322,9 +322,6 @@ impl App {
                     ].to_string()
                 )
             } else {
-                if self.current_col == 0 {
-                    eprintln!("{}", size);
-                }
                 Line::from(
                     highlighter.as_mut().unwrap().highlight_line(
                         // &line[
