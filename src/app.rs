@@ -5,7 +5,6 @@ use ratatui::{crossterm::event::{KeyEventKind, MouseEventKind}, layout::{Constra
 use ratatui::crossterm::event::{self, Event, KeyCode};
 use syntect::{easy::HighlightLines, highlighting::ThemeSet, parsing::SyntaxSet};
 use syntect_tui::translate_colour;
-use imara_diff::{Algorithm, diff, UnifiedDiffBuilder, intern::InternedInput};
 
 use crate::ui::{generate_block, Ui};
 use crate::helpers::compare_hashes;
@@ -61,22 +60,20 @@ impl App {
                 }
             }).collect::<Vec<Option<HighlightLines>>>();
             
-            // Put the file handles in a vec so we can iterate over them in the boxes later
-            let mut v_fps: Vec<File> = Vec::new();
-            v_fps.push(File::open(&self.args.file_1)?);
-            v_fps.push(File::open(&self.args.file_2)?);
-            
-            // Compute the hashes to see if the files are the same
-            compare_hashes(&mut v_fps)?;
-            drop(v_fps);
-            
-            // Hopefully this doesn't blow up your computer
-            let f1 = fs::read_to_string(&self.args.file_1)?;
-            let f2 = fs::read_to_string(&self.args.file_2)?;
-            
-            // let input = InternedInput::new(f1.as_str(), f2.as_str()); 
-            // let out = diff(Algorithm::Histogram, &input, UnifiedDiffBuilder::new(&input));
-            // eprintln!("{:?}", out);
+        // Compute the hashes to see if the files are the same
+        compare_hashes(&mut vec![File::open(&self.args.file_1)?, File::open(&self.args.file_2)?])?;
+        
+        // Hopefully this doesn't blow up your computer
+        let f1 = fs::read_to_string(&self.args.file_1)?;
+        let f2 = fs::read_to_string(&self.args.file_2)?;
+
+        if self.args.hex {
+            // Do hex expansion here
+        }
+
+        let num_characters = terminal.size()?.width / 2 - 10;
+        eprintln!("{}", num_characters);
+        
         // Draw a loading screen in case the files are large so the user doesn't think our program sucks (as much)
         terminal.draw(|frame| {
             let l1 = Line::from("Computing the diffs between the files...");
@@ -110,8 +107,10 @@ impl App {
         let diff1 = ops.create_patch(&f1, &f2);
 
         // Get the formatted Lines for display for each frame, slicing them based 
-        // let (left_lines, right_lines) = App::prepare_diff_lines(&diff1);
         let (left_colors, left_lines, right_colors, right_lines) = App::get_diff_lines(&diff1);
+
+        let left_lines = Self::highlight_lines(&left_lines, &mut syntaxes[0], &ps);
+        let right_lines = Self::highlight_lines(&right_lines, &mut syntaxes[1], &ps);
 
         // Put a limit on the self.current_line so it won't go off the page. Harder for horizontal scroll :(
         let max_file_len = std::cmp::max(left_colors.len(), right_colors.len());
@@ -157,15 +156,9 @@ impl App {
                     };
                     let block = generate_block(box_name.into_string().unwrap());
 
-                    // let text = match i {
-                    //     0 => self.generate_block_lines(&left_lines, &b),
-                    //     1 => self.generate_block_lines(&right_lines, &b),
-                    //     _ => Vec::new(),
-                    // };
-
                     let text = match i {
-                        0 => self.generate_rect_lines(&left_lines, &b, &mut  syntaxes[i], &ps),
-                        1 => self.generate_rect_lines(&right_lines, &b, &mut syntaxes[i], &ps),
+                        0 => self.get_rect_lines(&left_lines, &b, &mut  syntaxes[i]),
+                        1 => self.get_rect_lines(&right_lines, &b, &mut syntaxes[i]),
                         _ => Vec::new(),
                     };
 
@@ -174,7 +167,7 @@ impl App {
                         .bg(backgrounds[i])
                         .left_aligned();
                     
-                    let shift = ((self.current_line + b.height as usize - 3) as f64).log10() as u16 + 3;
+                    let shift = ((self.current_line + b.height as usize - 2) as f64).log10() as u16 + 3;
 
                     // Reduce width a little and shift over so we can render line numbers
                     let mut text_rect = b.clone();
@@ -243,17 +236,17 @@ impl App {
                                     self.current_line = self.current_line.saturating_sub(max_height - 5);
                                     break;
                                 },
-                                // KeyCode::Right => {
-                                //     self.current_col += 1;
-                                //     break;
-                                // },
-                                // KeyCode::Left => {
-                                //     // Don't scroll past beginning of line
-                                //     if self.current_col > 0 {
-                                //         self.current_col -= 1;
-                                //         break;
-                                //     }
-                                // },
+                                KeyCode::Right => {
+                                    self.current_col += 1;
+                                    break;
+                                },
+                                KeyCode::Left => {
+                                    // Don't scroll past beginning of line
+                                    if self.current_col > 0 {
+                                        self.current_col -= 1;
+                                        break;
+                                    }
+                                },
                                 KeyCode::Up => {
                                     // Don't scroll past beginning
                                     if self.current_line > 0 {
@@ -302,18 +295,38 @@ impl App {
         Ok(())
     }
 
-    fn generate_rect_lines<'a>(&self, lines: &'a Vec<String>, b: &Rect, highlighter: &mut Option<HighlightLines<'a>>, syntax: &SyntaxSet) -> Vec<Line<'a>> {
+    fn highlight_lines<'a>(lines: &'a Vec<String>, highlighter: &mut Option<HighlightLines<'a>>, syntax: &SyntaxSet) -> Vec<Vec<(syntect::highlighting::Style, &'a str)>> {
+        if highlighter.is_none() {
+            lines.iter().map(|line| {
+                vec![
+                    (syntect::highlighting::Style::default(), line.as_str())
+                ]
+            })
+            .collect::<Vec<Vec<(syntect::highlighting::Style, &str)>>>()
+        } else {
+            lines.iter().map(|line| {
+                highlighter.as_mut()
+                .unwrap()
+                .highlight_line(line, syntax)
+                .unwrap_or(Vec::new())
+            })
+            .collect::<Vec<Vec<(syntect::highlighting::Style, &str)>>>()
+        }
+    }
+
+    fn get_rect_lines<'a>(&self, lines: &'a Vec<Vec<(syntect::highlighting::Style, &'a str)>>, b: &Rect, highlighter: &mut Option<HighlightLines<'a>>) -> Vec<Line<'a>> {
         lines.iter().skip(self.current_line).take(b.height as usize).map(|line| {
-            let len = line.len();
-            let mut size = 0;
+            let len = line.iter().map(|s| s.1.len()).sum();
+            let mut size_so_far = 0;
 
             if len <= self.current_col {
                 return Line::from("");
             }
 
             if highlighter.is_none() {
+                let s = line.iter().map(|s| s.1).collect::<Vec<&str>>().join("");
                 Line::from(
-                    line[
+                    s[
                         self.current_col..
                         std::cmp::min(
                             len,
@@ -323,54 +336,33 @@ impl App {
                 )
             } else {
                 Line::from(
-                    highlighter.as_mut().unwrap().highlight_line(
-                        // &line[
-                        //     self.current_col..
-                        //     std::cmp::min(
-                        //         len,
-                        //         self.current_col + b.width as usize
-                        //     )
-                        // ], syntax
-                        line, syntax
-                    )
-                    .unwrap_or(Vec::new())
+                    line
                     .into_iter()
                     .map(|segment| {
+                        let len = segment.1.chars().count();
+                        
                         let fg = Color::Rgb(segment.0.foreground.r, segment.0.foreground.g, segment.0.foreground.b);
 
-                        // 👇 Don't use background color — override or skip
+                        // Don't use background color -- skip
                         let style = Style::default().fg(fg);
 
                         let ret;
                         
-                        if size < self.current_col && size + segment.1.len() > self.current_col {
+                        if size_so_far + segment.1.len() <= self.current_col {
+                            ret = Span::from("");
+                        } else if size_so_far < self.current_col && size_so_far + segment.1.len() > self.current_col {
                             ret = Span::styled(
-                                segment.1[self.current_col.saturating_sub(size)..]
+                                segment.1[self.current_col.saturating_sub(size_so_far)..]
                                 .to_string(),
                                 style
                             );
-                        } else if size + segment.1.len() < self.current_col {
-                            ret = Span::from("");
-                        } else if size + segment.1.len() > self.current_col + b.width as usize {
-                            ret = Span::styled(
-                                    {
-                                        if segment.1.len() > b.width as usize {
-                                            segment.1[self.current_col..std::cmp::min(self.current_col+b.width as usize, segment.1.len())].to_string()
-                                        } else {
-                                            segment.1[..segment.1.len().saturating_sub(size)].to_string()
-                                        }
-                                    },
-                                    style
-                                )
                         } else {
                             ret = Span::styled(segment.1, style);
                         }
 
-                        size += segment.1.len();
+                        size_so_far += len;
 
                         ret
-
-                        // Span::styled(segment.1, style)
                     })
                     .collect::<Vec<Span>>()
                 )
@@ -430,73 +422,5 @@ impl App {
         }
 
         (left_colors, left_lines, right_colors, right_lines)
-    }
-
-    fn generate_block_lines<'a>(&self, input_lines: &Vec<Line<'a>>, b: &Rect) -> Vec<Line<'a>> {
-        input_lines.iter().skip(self.current_line).map(|line| {
-            let span = &line.spans[0];
-            let style = span.style;
-            let mut content = span.content.clone().to_string();
-            let len = content.len();
-
-            if len <= self.current_col {
-                return Line::from("");
-            }
-            
-            if self.args.hex  {
-                content = content[self.current_col..std::cmp::min(len, self.current_col + b.width as usize)]
-                .as_bytes()
-                .chunks(self.args.width.unwrap_or(4))
-                .map(|chunk| {
-                    chunk.iter().map(|x| format!("{:0x}", x)).collect()
-                })
-                .collect::<Vec<String>>()
-                .iter().map(|l| {
-                    let mut s = String::new();
-                    for _ in l.len()..self.args.width.unwrap_or(4) *  2 {
-                        s.push('0');
-                    }
-                    format!("{}{}", s,  l)
-                })
-                .collect::<Vec<String>>().join(" ");
-            }  else {
-                content = content[self.current_col..std::cmp::min(len, self.current_col + b.width as usize)].to_string();
-            }
-
-            Line::styled(content, style)
-        }).collect::<Vec<Line>>()
-    }
-
-    fn prepare_diff_lines<'a>(patch: &'a diffy::Patch<'a, str>) -> (Vec<Line<'a>>, Vec<Line<'a>>) {
-        let mut left: Vec<Line> = Vec::new();
-        let mut right: Vec<Line> = Vec::new();
-
-        let context_style = Style::default().fg(Color::DarkGray);
-        let deleted_style = Style::default().fg(Color::Red);
-        let added_style = Style::default().fg(Color::Green);
-        let empty_line = Line::from(vec![Span::from("")]);
-
-        for hunk in patch.hunks() {
-            for line in hunk.lines() {
-                match line.to_owned() {
-                    diffy::Line::Context(l) => {
-                        let styled = Span::styled(l.trim(), context_style);
-                        left.push(Line::from(vec![styled.clone()]));
-                        right.push(Line::from(vec![styled]));
-                    },
-                    diffy::Line::Delete(l) => {
-                        let styled = Span::styled(l.trim(), deleted_style);
-                        left.push(Line::from(vec![styled]));
-                        right.push(empty_line.clone()); // Add placeholder to keep alignment
-                    },
-                    diffy::Line::Insert(l) => {
-                        let styled = Span::styled(l.trim(), added_style);
-                        left.push(empty_line.clone()); // Add placeholder
-                        right.push(Line::from(vec![styled]));
-                    }
-                }
-            }
-        }
-        (left, right)
     }
 }

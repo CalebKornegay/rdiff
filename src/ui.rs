@@ -36,7 +36,7 @@ impl Ui {
                 Line::from("[e] end of file"),
                 Line::from("[b] begining of file"),
                 Line::from("[\u{2195}] move up and down using arrow keys or mouse"),
-                // Line::from("[\u{2194}] move left and right using arrow keys")
+                Line::from("[\u{2194}] move left and right using arrow keys")
             ]
         );
 
