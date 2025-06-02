@@ -1173,7 +1173,7 @@ dependencies = [
 
 [[package]]
 name = "rdiff3"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "clap",
  "crossterm 0.29.0",

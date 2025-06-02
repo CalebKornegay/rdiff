@@ -1,9 +1,9 @@
 [package]
 name = "rdiff3"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Caleb Kornegay <caleb.kornegay@gmail.com>"]
 edition = "2021"
-description = "Terminal user interface to diff 2 files with a few command line options like hex with variable widths"
+description = "Terminal user interface to diff 2 files with syntax highlighting and vertical and horizontal scrolling"
 license-file = "LICENSE"
 
 [dependencies]
